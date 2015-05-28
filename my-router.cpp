@@ -5,22 +5,18 @@
 #include <iostream>
 #include <fstream> 
 #include <climits>
+
 using namespace std;
+using boost::asio::ip::udp;
 
-DVRouter::DVRouter(char rid){
-	id = rid; port = port_no(rid);
-}
-
-int main()
+DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
+    : id(rid), port(port_no(rid)), 
+    socket(io_service, udp::endpoint(udp::v4(), port))
 {
-
-
-    DVRouter B = DVRouter('F');
-    B.ft_init();
-    B.ft_print();
-    B.dv_init();
-    B.dv_print();
+	ft_init(); dv_init();
 }
+
+
 
 void DVRouter::ft_init()  // initialize forwarding table
 {
@@ -94,5 +90,16 @@ void DVRouter::dv_print() // print the distance vector table
             {printf("%d | ", DV[i][j]);}
         printf("\n");
     }
+}
+
+bool valid_router_id(char id){
+    return id == 'A' || id == 'B' || id == 'C'
+        || id == 'D' || id == 'E' || id == 'F';
+}
+
+int port_no(char id){
+    if(valid_router_id(id))
+        return 10000 + id - 'A';
+    return -1;
 }
 
