@@ -19,6 +19,12 @@ typedef struct{
 	int dest_port;
 } FTEntry;
 
+enum PKT_TYPE {
+	INVALID_PKT,
+	DATA_PKT,
+	CONTROL_PKT
+};
+
 class DVRouter
 {
 public:
@@ -30,7 +36,7 @@ public:
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
   						std::size_t);
-
+	PKT_TYPE get_packet_type();
 
 
 	char id;          // my id (A ~ F)

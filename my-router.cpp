@@ -2,10 +2,12 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
-#include <string.h>
+#include <string>
 #include <iostream>
 #include <fstream> 
 #include <climits>
+#include <cstring>
+#include <cctype>
 
 using namespace std;
 using boost::asio::ip::udp;
@@ -33,10 +35,38 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
 {
     if (!error || error == boost::asio::error::message_size)
     {
-      printf("Server Received Message:\n%s\n", data_buffer);
+      printf("Server Received Message from port %d:\n%s\n", 
+                sender_endpoint.port(), data_buffer);
+
+      PKT_TYPE type = get_packet_type();
+      if(type == DATA_PKT)
+        printf("Data packet received\n");
+    else if(type == CONTROL_PKT)
+        printf("Control packet received\n");
+    else
+        printf("Invalid packet received\n");
 
       start_receive();
     }
+}
+
+PKT_TYPE DVRouter::get_packet_type(){
+    char* found;
+    if( !(found = strstr(data_buffer, "Type: ")) )
+        return INVALID_PKT;
+
+    found += 6;
+    char type_str[10];
+    PKT_TYPE type;
+    bzero(type_str, 10);
+
+    for(int i = 0; found[i] != 0 && !isspace(found[i]); i++)
+        type_str[i] = found[i];
+    if(!strcmp(type_str, "Control")) type = CONTROL_PKT;
+    else if(!strcmp(type_str, "Data")) type = DATA_PKT;
+    else type = INVALID_PKT;
+
+    return type;
 }
 
 
