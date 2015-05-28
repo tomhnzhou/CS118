@@ -14,6 +14,7 @@ int main(int argc, char* argv[])
 
     boost::asio::io_service io_service;
     DVRouter B = DVRouter(*(argv[1]), io_service);
-    B.ft_print();
-    B.dv_print();
+    io_service.run();
+    //B.ft_print();
+    //B.dv_print();
 }

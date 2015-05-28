@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string.h>
 #include <iostream>
 #include <fstream> 
 #include <climits>
@@ -13,7 +14,29 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
     : id(rid), port(port_no(rid)), 
     socket(io_service, udp::endpoint(udp::v4(), port))
 {
+    bzero(data_buffer, MAX_LENGTH);
 	ft_init(); dv_init();
+    start_receive();
+}
+
+void DVRouter::start_receive()
+{
+    socket.async_receive_from(
+    boost::asio::buffer(data_buffer), sender_endpoint,
+    boost::bind(&DVRouter::handle_receive, this,
+      boost::asio::placeholders::error,
+      boost::asio::placeholders::bytes_transferred));
+}
+
+void DVRouter::handle_receive(const boost::system::error_code& error,
+  std::size_t /*bytes_transferred*/)
+{
+    if (!error || error == boost::asio::error::message_size)
+    {
+      printf("Server Received Message:\n%s\n", data_buffer);
+
+      start_receive();
+    }
 }
 
 

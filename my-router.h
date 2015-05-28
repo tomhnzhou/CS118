@@ -27,7 +27,9 @@ public:
     void dv_init();   // initialize distance vector table, need to ft_init first
     void ft_print();  // print the forwarding table
     void dv_print();  // print the distance vector table
-
+	void start_receive();
+	void handle_receive(const boost::system::error_code& error,
+  						std::size_t);
 
 
 
@@ -36,7 +38,7 @@ public:
 	udp::socket socket;     // my socket descriptor
 	udp::endpoint sender_endpoint;
 	const static int MAX_LENGTH = 1024;
-	char buffer[MAX_LENGTH];
+	char data_buffer[MAX_LENGTH];
 
     char neighbor[6]; // who are my neighbors?
 	FTEntry ft[6];    // the forwarding table
@@ -45,7 +47,6 @@ public:
 };
 
 bool valid_router_id(char id);
-
 int port_no(char id);
 
 
