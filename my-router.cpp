@@ -26,7 +26,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
     if(id == 'H'){
         bzero(data_buffer, MAX_LENGTH);
         strcpy(data_buffer, "Type: Data\n");
-        strcat(data_buffer, "Src ID: A, Dest ID: D\n");
+        strcat(data_buffer, "Src ID: A, Dest ID: E\n");
 
         int header_len = strlen(data_buffer);
         int bytes_to_read = MAX_LENGTH - header_len -1;
@@ -40,7 +40,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
         timer = new boost::asio::deadline_timer(io_service, boost::posix_time::seconds(5));
         bzero(data_buffer, MAX_LENGTH);
         bzero(neighbors, 6);
-    	ft_init(); dv_init(); dv_print();
+    	ft_init(); dv_init(); dv_print(); ft_print();
         start_receive();
         timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
     }
@@ -152,12 +152,12 @@ void DVRouter::handle_data_pkt()
     char src_id = line[8];
     char dest_id = line[20];
     //printf("Sender ID is: %c\n", sender_id);
+    int out_port = get_out_port(dest_id);
+    log_output_file(DATA_PKT, src_id, dest_id, sender_endpoint.port(), out_port);
 
     if(src_id == id) return;
 
-    int out_port = get_out_port(dest_id);
-    send_to(out_port);
-    log_output_file(DATA_PKT, src_id, dest_id, sender_endpoint.port(), out_port);
+    send_to(out_port); 
 }
 
 // send the data in data_buffer to the specified port
@@ -245,7 +245,7 @@ void DVRouter::handle_control_pkt()
             //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
 
     update(dv, sender_id);
-    dv_print();
+    dv_print(); ft_print();
     log_output_file(CONTROL_PKT, sender_id, id, port_no(sender_id), -1);
 }
 
@@ -297,14 +297,14 @@ void DVRouter::ft_init()  // initialize forwarding table
 {
     string line;
     for (int i = 0; i < 6; i++)
-        {
-            ft[i].dest_id = 'A' + i;
-            ft[i].cost = INT_MAX;
-            if (ft[i].dest_id == id)
-                {ft[i].cost = 0;}
-            ft[i].out_port = port;
-            ft[i].dest_port = 0;
-        }
+    {
+        ft[i].dest_id = 'A' + i;
+        ft[i].cost = INT_MAX;
+        if (ft[i].dest_id == id)
+            {ft[i].cost = 0;}
+        ft[i].out_port = port;
+        ft[i].dest_port = 0;
+    }
     ifstream myfile ("topology.txt", ifstream::in); // change topology file here!!!!
 
     int neighbor_i = 0;
@@ -374,8 +374,8 @@ void DVRouter::dv_print() // print the distance vector table
     }
 }
 
- void DVRouter::update(int dv[6], char neighbor_id)
- {
+void DVRouter::update(int dv[6], char neighbor_id)
+{
     int my_row_num = id - 'A'; 
     int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
     for (int i = 0; i < 6; i++)
@@ -398,7 +398,7 @@ void DVRouter::dv_print() // print the distance vector table
             ft[i].dest_port = port_no(neighbor_id);
         }
     }
- }
+}
 
 bool valid_router_id(char id){
     return id == 'A' || id == 'B' || id == 'C'
