@@ -44,6 +44,10 @@ public:
 	void handle_data_pkt();
 	void handle_control_pkt();
 
+	int get_out_port(char dest);
+	void send_to(int port);
+	void log_output_file(PKT_TYPE type,char src, char dest, int last, int next);
+
 	PKT_TYPE get_packet_type();
 	void periodic_send();
 	void format_dv_msg();

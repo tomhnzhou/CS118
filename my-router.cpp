@@ -1,7 +1,9 @@
 #include "my-router.h"
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 #include <cstdio>
 #include <string>
 #include <iostream>
@@ -20,12 +22,27 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
     : id(rid), port(port_no(rid)), 
     socket(io_service, udp::endpoint(udp::v4(), port))
 {
-    timer = new boost::asio::deadline_timer(io_service, boost::posix_time::seconds(5));
-    bzero(data_buffer, MAX_LENGTH);
-    bzero(neighbors, 6);
-	ft_init(); dv_init(); dv_print();
-    start_receive();
-    timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
+    if(id == 'H'){
+        bzero(data_buffer, MAX_LENGTH);
+        strcpy(data_buffer, "Type: Data\n");
+        strcat(data_buffer, "Src ID: A, Dest ID: D\n");
+
+        int header_len = strlen(data_buffer);
+        int bytes_to_read = MAX_LENGTH - header_len -1;
+        int fd = open("testdata.txt", O_RDONLY);
+        char* sof = &data_buffer[header_len];
+        if(read(fd, sof, bytes_to_read) < 0) return;
+
+        send_to(port_no('A'));
+    }
+    else {
+        timer = new boost::asio::deadline_timer(io_service, boost::posix_time::seconds(5));
+        bzero(data_buffer, MAX_LENGTH);
+        bzero(neighbors, 6);
+    	ft_init(); dv_init(); dv_print();
+        start_receive();
+        timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
+    }
 }
 
 // periodically send a message to each neighbor every 5 seconds
@@ -36,13 +53,7 @@ void DVRouter::periodic_send()
 	for(int i = 0; neighbors[i] != 0 && i < 6; i++){
 		int neighbor_port = port_no(neighbors[i]);
 		format_dv_msg();
-		boost::shared_ptr<std::string> message(
-          new std::string(data_buffer));
-		socket.async_send_to(boost::asio::buffer(*message), 
-						udp::endpoint(udp::v4(), neighbor_port),
-			          boost::bind(&DVRouter::handle_send, this, message,
-			            boost::asio::placeholders::error,
-			            boost::asio::placeholders::bytes_transferred));
+        send_to(neighbor_port);
 	}
 
 	timer->expires_at(timer->expires_at() + boost::posix_time::seconds(5));
@@ -126,7 +137,80 @@ void DVRouter::parse_dv_line(string line, int dv[6])
 
 void DVRouter::handle_data_pkt()
 {
+    int offset;
+    string line;
+    char* next_line;
 
+    // "Type: " line
+    if((offset = parse_msg(data_buffer, line)) < 0) return;
+
+    // "Src ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    char src_id = line[8];
+    char dest_id = line[20];
+    //printf("Sender ID is: %c\n", sender_id);
+
+    if(src_id == id) return;
+
+    int out_port = get_out_port(dest_id);
+    send_to(out_port);
+    log_output_file(DATA_PKT, src_id, dest_id, sender_endpoint.port(), out_port);
+}
+
+// send the data in data_buffer to the specified port
+void DVRouter::send_to(int port){
+    boost::shared_ptr<std::string> message(
+            new std::string(data_buffer));
+    socket.async_send_to(boost::asio::buffer(*message), 
+                        udp::endpoint(udp::v4(), port),
+                        boost::bind(&DVRouter::handle_send, this, message,
+                        boost::asio::placeholders::error,
+                        boost::asio::placeholders::bytes_transferred));
+}
+
+void DVRouter::log_output_file(PKT_TYPE type, char src, char dest, 
+                                int last, int next)
+{
+    int fd;
+    char log_filename[20]; bzero(log_filename, 20);
+    sprintf(log_filename, "routing-output%c.txt", id);
+    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT)) < 0) return;
+
+    char type_str[10]; bzero(type_str, 10);
+    switch(type){
+        case DATA_PKT:   strcpy(type_str, "Data"); break;
+        case CONTROL_PKT:   strcpy(type_str, "Control"); break;
+        default:   strcpy(type_str, "Invalid");
+    }
+
+    char str_last[6]; char str_next[6];
+    sprintf(str_last, "%d", last);
+    if(next > 0) sprintf(str_next, "%d", next);
+    else strcpy(str_next, "-----");
+
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    char log_line[100]; bzero(log_line, 100);
+    sprintf (log_line, "%s> Packet Type: %s, Src: %c, Dest: %c, Received From: %s, Send to: %s\n", 
+            asctime(timeinfo), type_str,src,dest,str_last,str_next);
+
+    write(fd, log_line, strlen(log_line));
+    close(fd);
+}
+
+// returns the next port on the shrotest path to dest
+int DVRouter::get_out_port(char dest)
+{
+    for(int i=0; i<6; i++){
+        if(ft[i].dest_id == dest)
+            return ft[i].out_port;
+    }
+    return -1;
 }
 
 void DVRouter::handle_control_pkt()
@@ -152,11 +236,12 @@ void DVRouter::handle_control_pkt()
     int dv[6];
     parse_dv_line(line, dv);
 
-    printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
-            dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
+    //printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
+            //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
 
     update(dv, sender_id);
     dv_print();
+    log_output_file(CONTROL_PKT, sender_id, id, port_no(sender_id), -1);
 }
 
 //format a DV update message and store it in data_buffer
@@ -312,7 +397,8 @@ void DVRouter::dv_print() // print the distance vector table
 
 bool valid_router_id(char id){
     return id == 'A' || id == 'B' || id == 'C'
-        || id == 'D' || id == 'E' || id == 'F';
+        || id == 'D' || id == 'E' || id == 'F'
+        || id == 'H';
 }
 
 int port_no(char id){
