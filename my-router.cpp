@@ -3,6 +3,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <errno.h>
 #include <time.h>
 #include <cstdio>
 #include <string>
@@ -176,7 +177,10 @@ void DVRouter::log_output_file(PKT_TYPE type, char src, char dest,
     int fd;
     char log_filename[20]; bzero(log_filename, 20);
     sprintf(log_filename, "routing-output%c.txt", id);
-    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT)) < 0) return;
+    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT, 0644)) < 0) {
+        printf("Error: open log failed, %s\n", strerror(errno));
+        return;
+    }
 
     char type_str[10]; bzero(type_str, 10);
     switch(type){
@@ -196,10 +200,11 @@ void DVRouter::log_output_file(PKT_TYPE type, char src, char dest,
     timeinfo = localtime(&rawtime);
 
     char log_line[100]; bzero(log_line, 100);
-    sprintf (log_line, "%s> Packet Type: %s, Src: %c, Dest: %c, Received From: %s, Send to: %s\n", 
+    sprintf (log_line, "%s> Packet Type: %s, Src: %c, Dest: %c, From: %s, To: %s\n", 
             asctime(timeinfo), type_str,src,dest,str_last,str_next);
 
-    write(fd, log_line, strlen(log_line));
+    if(write(fd, log_line, strlen(log_line)) < 0)
+        printf("write log failed!!!\n");
     close(fd);
 }
 
