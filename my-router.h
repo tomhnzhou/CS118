@@ -39,6 +39,9 @@ public:
 	void handle_send(boost::shared_ptr<std::string> /*message*/,
       const boost::system::error_code& /*error*/,
       std::size_t /*bytes_transferred*/);
+	void handle_data_pkt();
+	void handle_control_pkt();
+
 	PKT_TYPE get_packet_type();
 	void periodic_send();
 	void format_dv_update();

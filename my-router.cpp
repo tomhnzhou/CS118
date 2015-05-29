@@ -68,10 +68,14 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
                 sender_endpoint.port(), data_buffer);
 
         PKT_TYPE type = get_packet_type();
-        if(type == DATA_PKT)
+        if(type == DATA_PKT){
             printf("Data packet received\n");
-        else if(type == CONTROL_PKT)
+            handle_data_pkt();
+          }
+        else if(type == CONTROL_PKT){
             printf("Control packet received\n");
+            handle_control_pkt();
+          }
         else
             printf("Invalid packet received\n");
 
@@ -85,11 +89,27 @@ void DVRouter::handle_send(boost::shared_ptr<std::string> /*message*/,
 {
 }
 
+void DVRouter::handle_data_pkt()
+{
+
+}
+
+void DVRouter::handle_control_pkt()
+{
+
+}
+
 //format a DV update message and store it in data_buffer
 void DVRouter::format_dv_update()
 {
 	bzero(data_buffer, MAX_LENGTH);
 	strcpy(data_buffer, "Type: Control\n");
+
+	char source_id[11]; bzero(source_id, 11);
+	strcpy(source_id, "Src ID: ");
+	source_id[8] = id;
+	source_id[9] = '\n';
+	strcat(data_buffer, source_id);
 
 	char self_dv[12]; bzero(self_dv, 12);
 
