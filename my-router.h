@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <stdio.h>
+#include <string>
 #include <boost/array.hpp>
 #include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
@@ -33,6 +34,7 @@ public:
     void dv_init();   // initialize distance vector table, need to ft_init first
     void ft_print();  // print the forwarding table
     void dv_print();  // print the distance vector table
+    void update(int dv[6], char neighbor_id);
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
   						std::size_t);
@@ -44,7 +46,10 @@ public:
 
 	PKT_TYPE get_packet_type();
 	void periodic_send();
-	void format_dv_update();
+	void format_dv_msg();
+
+	int parse_msg(char* buf, std::string& line);
+	void parse_dv_line(std::string line, int dv[6]);
 
 
 	char id;          // my id (A ~ F)

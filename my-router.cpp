@@ -23,7 +23,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
     timer = new boost::asio::deadline_timer(io_service, boost::posix_time::seconds(5));
     bzero(data_buffer, MAX_LENGTH);
     bzero(neighbors, 6);
-	ft_init(); dv_init();
+	ft_init(); dv_init(); dv_print();
     start_receive();
     timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
 }
@@ -35,7 +35,7 @@ void DVRouter::periodic_send()
 
 	for(int i = 0; neighbors[i] != 0 && i < 6; i++){
 		int neighbor_port = port_no(neighbors[i]);
-		format_dv_update();
+		format_dv_msg();
 		boost::shared_ptr<std::string> message(
           new std::string(data_buffer));
 		socket.async_send_to(boost::asio::buffer(*message), 
@@ -90,6 +90,40 @@ void DVRouter::handle_send(boost::shared_ptr<std::string> /*message*/,
 {
 }
 
+//set offset until next newline, return line as string
+int DVRouter::parse_msg(char* buf, string& line)
+{
+    char* ptr = strstr(buf, "\n");
+    if(!ptr){
+        line = string(buf);
+        return strlen(buf);
+    }
+    int offset = ptr - data_buffer + 1;
+    line = string(buf, ptr-buf);
+    return offset;
+}
+
+void DVRouter::parse_dv_line(string line, int dv[6])
+{
+    string delimiter = ",";
+    string token;
+    for(int i=0; i<5; i++){
+        token = line.substr(0, line.find(delimiter));
+        //printf("Token is: %s\n", token.c_str());
+        if(token == "-")
+            dv[i] = INT_MAX;
+        else
+            dv[i] = stoi(token, nullptr, 10);
+
+        line.erase(0, line.find(delimiter) + delimiter.length());
+        //printf("After erase, line is: %s\n", line.c_str());
+    }
+    if(line == "-")
+        dv[5] = INT_MAX;
+    else
+        dv[5] = stoi(line, nullptr, 10);
+}
+
 void DVRouter::handle_data_pkt()
 {
 
@@ -97,11 +131,36 @@ void DVRouter::handle_data_pkt()
 
 void DVRouter::handle_control_pkt()
 {
+    int offset;
+    string line;
+    char* next_line;
 
+    // "Type: " line
+    if((offset = parse_msg(data_buffer, line)) < 0) return;
+
+    // "Src ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    char sender_id = line[8];
+    //printf("Sender ID is: %c\n", sender_id);
+
+    // DV line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    int dv[6];
+    parse_dv_line(line, dv);
+
+    printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
+            dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
+
+    update(dv, sender_id);
+    dv_print();
 }
 
 //format a DV update message and store it in data_buffer
-void DVRouter::format_dv_update()
+void DVRouter::format_dv_msg()
 {
 	bzero(data_buffer, MAX_LENGTH);
 	strcpy(data_buffer, "Type: Control\n");
@@ -143,8 +202,6 @@ PKT_TYPE DVRouter::get_packet_type(){
 
     return type;
 }
-
-
 
 void DVRouter::ft_init()  // initialize forwarding table
 {
@@ -219,10 +276,39 @@ void DVRouter::dv_print() // print the distance vector table
     {
         printf("%c | ", 'A'+i);
         for (int j = 0; j < 6; j++)
-            {printf("%d | ", DV[i][j]);}
+        {
+            if(DV[i][j] == INT_MAX) printf("%c | ", '-');
+            else printf("%d | ", DV[i][j]);
+        }
         printf("\n");
     }
 }
+
+ void DVRouter::update(int dv[6], char neighbor_id)
+ {
+    int my_row_num = id - 'A'; 
+    int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
+    for (int i = 0; i < 6; i++)
+        {DV[Neigh_row_num][i] = dv[i];}
+    int to_Neigh_cost = dv[my_row_num];
+    for (int i = 0; i < 6; i++)
+    {
+        if (DV[my_row_num][i] == to_Neigh_cost + dv[i]) // if the same total cost, alphabet order!
+        {
+            if (neighbor_id < ft[i].dest_id)
+            {
+                ft[i].dest_id = neighbor_id;
+                ft[i].dest_port = port_no(neighbor_id);
+            }
+        }
+        else if (DV[my_row_num][i] > to_Neigh_cost + dv[i] && dv[i] != INT_MAX) // need to update DV!
+        {
+            DV[my_row_num][i] = to_Neigh_cost + dv[i];
+            ft[i].dest_id = neighbor_id;
+            ft[i].dest_port = port_no(neighbor_id);
+        }
+    }
+ }
 
 bool valid_router_id(char id){
     return id == 'A' || id == 'B' || id == 'C'
