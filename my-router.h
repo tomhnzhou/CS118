@@ -36,17 +36,23 @@ public:
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
   						std::size_t);
+	void handle_send(boost::shared_ptr<std::string> /*message*/,
+      const boost::system::error_code& /*error*/,
+      std::size_t /*bytes_transferred*/);
 	PKT_TYPE get_packet_type();
+	void periodic_send();
+	void format_dv_update();
 
 
 	char id;          // my id (A ~ F)
 	int port;      // my port number
 	udp::socket socket;     // my socket descriptor
 	udp::endpoint sender_endpoint;
+	boost::asio::deadline_timer* timer;
 	const static int MAX_LENGTH = 1024;
 	char data_buffer[MAX_LENGTH];
 
-    char neighbor[6]; // who are my neighbors?
+    char neighbors[6]; // who are my neighbors?
 	FTEntry ft[6];    // the forwarding table
     int DV[6][6];     // the distance vector table
 
