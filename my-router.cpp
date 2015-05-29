@@ -64,16 +64,17 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
 {
     if (!error || error == boost::asio::error::message_size)
     {
-        printf("Server Received Message from port %d:\n%s\n", 
-                sender_endpoint.port(), data_buffer);
+        printf("Server Received Message from port %d:\n", sender_endpoint.port());
+        printf("+------------------------+\n%s\n", data_buffer);
+        printf("+------------------------+\n\n");
 
         PKT_TYPE type = get_packet_type();
         if(type == DATA_PKT){
-            printf("Data packet received\n");
+            //printf("Data packet received\n");
             handle_data_pkt();
           }
         else if(type == CONTROL_PKT){
-            printf("Control packet received\n");
+            //printf("Control packet received\n");
             handle_control_pkt();
           }
         else
