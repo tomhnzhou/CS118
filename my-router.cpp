@@ -91,7 +91,7 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
           }
         else
             printf("Invalid packet received\n");
-
+        bzero(data_buffer, MAX_LENGTH);
         start_receive();
     }
 }
@@ -155,8 +155,9 @@ void DVRouter::handle_data_pkt()
     int out_port = get_out_port(dest_id);
     log_output_file(DATA_PKT, src_id, dest_id, sender_endpoint.port(), out_port);
 
-    if(src_id == id) return;
+    if(dest_id == id) return;
 
+    printf("Sending to port %d...\n", out_port);
     send_to(out_port); 
 }
 
@@ -169,6 +170,7 @@ void DVRouter::send_to(int port){
                         boost::bind(&DVRouter::handle_send, this, message,
                         boost::asio::placeholders::error,
                         boost::asio::placeholders::bytes_transferred));
+    bzero(data_buffer, MAX_LENGTH);
 }
 
 void DVRouter::log_output_file(PKT_TYPE type, char src, char dest, 
@@ -211,10 +213,9 @@ void DVRouter::log_output_file(PKT_TYPE type, char src, char dest,
 // returns the next port on the shrotest path to dest
 int DVRouter::get_out_port(char dest)
 {
-    for(int i=0; i<6; i++){
-        if(ft[i].dest_id == dest)
-            return ft[i].out_port;
-    }
+    int i = dest-'A';
+    if(ft[i].cost != INT_MAX)
+        return ft[i].dest_port;
     return -1;
 }
 
@@ -352,7 +353,14 @@ void DVRouter::ft_print() // print the forwarding table
 {
     printf("\nprinting FT... 0______0\n");
     for (int i = 0; i < 6; i++)
-    { printf("%c | C=%d, outport=%d, destport=%d\n", ft[i].dest_id, ft[i].cost, ft[i].out_port, ft[i].dest_port);}
+    { 
+        if(ft[i].cost == INT_MAX)
+            printf("%c | C=%c, outport=%d, destport=%d\n", 
+                    ft[i].dest_id, '-', ft[i].out_port, ft[i].dest_port);
+        else
+            printf("%c | C=%d, outport=%d, destport=%d\n", 
+                ft[i].dest_id, ft[i].cost, ft[i].out_port, ft[i].dest_port);
+    }
     printf("end of FT!\n");
 }
 
