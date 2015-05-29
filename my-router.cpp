@@ -203,6 +203,32 @@ void DVRouter::dv_print() // print the distance vector table
     }
 }
 
+ void DVRouter::update(int dv[6], char neighbor_id)
+ {
+    int my_row_num = id - 'A'; 
+    int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
+    for (int i = 0; i < 6; i++)
+        {DV[Neigh_row_num][i] = dv[i];}
+    int to_Neigh_cost = dv[Neigh_row_num];
+    for (int i = 0; i < 6; i++)
+    {
+        if (DV[my_row_num][i] == to_Neigh_cost + dv[i]) // if the same total cost, alphabet order!
+        {
+            if (neighbor_id < ft[i].dest_id)
+            {
+                ft[i].dest_id = neighbor_id;
+                ft[i].dest_port = port_no(neighbor_id);
+            }
+        }
+        else if (DV[my_row_num][i] > to_Neigh_cost + dv[i]) // need to update DV!
+        {
+            DV[my_row_num][i] = to_Neigh_cost + dv[i];
+            ft[i].dest_id = neighbor_id;
+            ft[i].dest_port = port_no(neighbor_id);
+        }
+    }
+ }
+
 bool valid_router_id(char id){
     return id == 'A' || id == 'B' || id == 'C'
         || id == 'D' || id == 'E' || id == 'F';

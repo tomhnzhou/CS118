@@ -33,6 +33,7 @@ public:
     void dv_init();   // initialize distance vector table, need to ft_init first
     void ft_print();  // print the forwarding table
     void dv_print();  // print the distance vector table
+    void update(int dv[6], char neighbor_id);
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
   						std::size_t);
