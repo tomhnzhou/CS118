@@ -1,7 +1,7 @@
 if [ "$#" -eq 1 ]; then
 	if [ "$1" == '-r' ]; then
 		randids=$(shuf -e A B C D E F)
-		echo "Starting routers in this sequence: $randids"
+		echo "Starting routers in this order: $randids"
 		IFS=$'\n'
 		for id in $randids
 		do
@@ -13,6 +13,7 @@ if [ "$#" -eq 1 ]; then
 		done
 	fi
 elif [ "$#" -eq 6 ]; then
+	echo "Starting routers in this order: $1 $2 $3 $4 $5 $6"
 	for id in "$@"
 	do
 			if [ -f "routing-output$id.txt" ]; then
