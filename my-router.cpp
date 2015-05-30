@@ -388,22 +388,25 @@ void DVRouter::update(int dv[6], char neighbor_id)
     int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
     for (int i = 0; i < 6; i++)
         {DV[Neigh_row_num][i] = dv[i];}
-    int to_Neigh_cost = dv[my_row_num];
+    int to_Neigh_cost = ft[Neigh_row_num].cost;
     for (int i = 0; i < 6; i++)
     {
-        if (DV[my_row_num][i] == to_Neigh_cost + dv[i]) // if the same total cost, alphabet order!
-        {
-            if (neighbor_id < ft[i].dest_id)
+        if(dv[i] != INT_MAX && i != Neigh_row_num){
+            if (DV[my_row_num][i] == to_Neigh_cost + dv[i]) // if the same total cost, alphabet order!
             {
+                if (neighbor_id < ft[i].dest_id)
+                {
+                    ft[i].dest_id = neighbor_id;
+                    ft[i].dest_port = port_no(neighbor_id);
+                }
+            }
+            else if (DV[my_row_num][i] > to_Neigh_cost + dv[i])// need to update DV!
+            {
+                DV[my_row_num][i] = to_Neigh_cost + dv[i];
                 ft[i].dest_id = neighbor_id;
                 ft[i].dest_port = port_no(neighbor_id);
+                //ft[i].cost = to_Neigh_cost + dv[i];
             }
-        }
-        else if (DV[my_row_num][i] > to_Neigh_cost + dv[i] && dv[i] != INT_MAX) // need to update DV!
-        {
-            DV[my_row_num][i] = to_Neigh_cost + dv[i];
-            ft[i].dest_id = neighbor_id;
-            ft[i].dest_port = port_no(neighbor_id);
         }
     }
 }
