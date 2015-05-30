@@ -26,7 +26,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
     if(id == 'H'){
         bzero(data_buffer, MAX_LENGTH);
         strcpy(data_buffer, "Type: Data\n");
-        strcat(data_buffer, "Src ID: A, Dest ID: E\n");
+        strcat(data_buffer, "Src ID: A, Dest ID: D\n");
 
         int header_len = strlen(data_buffer);
         int bytes_to_read = MAX_LENGTH - header_len -1;
@@ -214,9 +214,7 @@ void DVRouter::log_output_file(PKT_TYPE type, char src, char dest,
 int DVRouter::get_out_port(char dest)
 {
     int i = dest-'A';
-    if(ft[i].cost != INT_MAX)
-        return ft[i].dest_port;
-    return -1;
+    return ft[i].dest_port;
 }
 
 void DVRouter::handle_control_pkt()
