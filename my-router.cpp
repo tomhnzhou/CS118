@@ -27,6 +27,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
         bzero(data_buffer, MAX_LENGTH);
         strcpy(data_buffer, "Type: Data\n");
         strcat(data_buffer, "Src ID: A, Dest ID: D\n");
+        strcat(data_buffer, "Path:       \n");
 
         int header_len = strlen(data_buffer);
         int bytes_to_read = MAX_LENGTH - header_len -1;
@@ -133,6 +134,41 @@ void DVRouter::parse_dv_line(string line, int dv[6])
         dv[5] = stoi(line, nullptr, 10);
 }
 
+void DVRouter::handle_control_pkt()
+{
+    int offset;
+    string line;
+    char* next_line;
+
+    // "Type: " line
+    if((offset = parse_msg(data_buffer, line)) < 0) return;
+
+    // "Src ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    char sender_id = line[8];
+    //printf("Sender ID is: %c\n", sender_id);
+
+    // DV line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    int dv[6];
+    parse_dv_line(line, dv);
+
+    char path[3]; 
+    path[0] = sender_id; path[1] = id; path[2]=0;
+
+    //printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
+            //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
+
+    update(dv, sender_id);
+    //dv_print(); ft_print();
+    write_output_file(CONTROL_PKT, sender_id, id, 
+                port_no(sender_id), -1, string(path));
+}
+
 void DVRouter::handle_data_pkt()
 {
     int offset;
@@ -148,9 +184,24 @@ void DVRouter::handle_data_pkt()
 
     char src_id = line[8];
     char dest_id = line[20];
+
+    // "Path: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    int path_len = 0;
+    for(int i = 6; i < line.length(); i++){
+        if(valid_router_id(line[i])) path_len++;
+        else break;
+    }
+    next_line[6+path_len] = id;
+    string path = line.substr(6, path_len+1);
+
+
     //printf("Sender ID is: %c\n", sender_id);
     int out_port = get_out_port(dest_id);
-    write_output_file(DATA_PKT, src_id, dest_id, sender_endpoint.port(), out_port);
+    write_output_file(DATA_PKT, src_id, dest_id, 
+                    sender_endpoint.port(), out_port, path);
 
     if(dest_id == id) return;
 
@@ -171,7 +222,7 @@ void DVRouter::send_to(int port){
 }
 
 void DVRouter::write_output_file(PKT_TYPE type, char src, char dest, 
-                                int last, int next)
+                                int last, int next, string path)
 {
     int fd;
     char log_filename[20]; bzero(log_filename, 20);
@@ -197,12 +248,23 @@ void DVRouter::write_output_file(PKT_TYPE type, char src, char dest,
     struct tm * timeinfo;
     time(&rawtime);
     timeinfo = localtime(&rawtime);
+    char* time_str = asctime(timeinfo);
+    time_str[strlen(time_str)-1] = 0;
 
-    char log_line[100]; bzero(log_line, 100);
-    sprintf (log_line, "%s> Packet Type: %s, Src: %c, Dest: %c, From: %s, To: %s\n", 
-            asctime(timeinfo), type_str,src,dest,str_last,str_next);
+    char log_str[2048]; bzero(log_str, 2048);
+    sprintf (log_str, "%c>(%s) Type: %s, Src: %c, Dest: %c, From: %s, To: %s "
+                "Path: %s\n",
+            id, time_str, type_str,src,dest,str_last,str_next, 
+            path.c_str());
 
-    if(write(fd, log_line, strlen(log_line)) < 0)
+    if(type == DATA_PKT && dest == id){
+        char data_str[1024]; bzero(data_str, 1024);
+        sprintf(data_str,   "+------Received Data-----+\n%s\n"
+                            "+------------------------+\n", data_buffer);
+        strcat(log_str, data_str);
+    }
+
+    if(write(fd, log_str, strlen(log_str)) < 0)
         printf("write log failed!!!\n");
     close(fd);
 }
@@ -247,37 +309,6 @@ int DVRouter::get_out_port(char dest)
 {
     int i = dest-'A';
     return ft[i].dest_port;
-}
-
-void DVRouter::handle_control_pkt()
-{
-    int offset;
-    string line;
-    char* next_line;
-
-    // "Type: " line
-    if((offset = parse_msg(data_buffer, line)) < 0) return;
-
-    // "Src ID: " line
-    next_line = &(data_buffer[offset]);
-    if((offset = parse_msg(next_line, line)) < 0) return;
-
-    char sender_id = line[8];
-    //printf("Sender ID is: %c\n", sender_id);
-
-    // DV line
-    next_line = &(data_buffer[offset]);
-    if((offset = parse_msg(next_line, line)) < 0) return;
-
-    int dv[6];
-    parse_dv_line(line, dv);
-
-    //printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
-            //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
-
-    update(dv, sender_id);
-    //dv_print(); ft_print();
-    write_output_file(CONTROL_PKT, sender_id, id, port_no(sender_id), -1);
 }
 
 //format a DV update message and store it in data_buffer

@@ -47,7 +47,9 @@ public:
 	int get_out_port(char dest);
 	void send_to(int port);
 	void write_log_file();
-	void write_output_file(PKT_TYPE type,char src, char dest, int last, int next);
+	void write_output_file(PKT_TYPE type, 
+			char src, char dest, 
+			int last, int next, std::string path);
 
 	PKT_TYPE get_packet_type();
 	void periodic_send();
