@@ -5,9 +5,9 @@ print_err () {
 }
 if [ "$#" -eq 1 ]; then
 	if [ "$1" == '-r' ]; then
-		randids=$(shuf -e A B C D E F)
+		randids=$(shuf -e A B C D E F | tr '\n' ' ')
 		echo "Starting routers in this order: $randids"
-		IFS=$'\n'
+		IFS=$' '
 		for id in $randids
 		do
 			if [ -f "routing-output$id.txt" ]; then
