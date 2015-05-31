@@ -32,8 +32,8 @@ public:
 	DVRouter(char rid, boost::asio::io_service& io_service); // initializer
 	void ft_init();   // initialize forwarding table
     void dv_init();   // initialize distance vector table, need to ft_init first
-    void ft_print();  // print the forwarding table
-    void dv_print();  // print the distance vector table
+    void ft_print(int fd);  // print the forwarding table
+    void dv_print(int fd);  // print the distance vector table
     void update(int dv[6], char neighbor_id);
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
@@ -46,7 +46,8 @@ public:
 
 	int get_out_port(char dest);
 	void send_to(int port);
-	void log_output_file(PKT_TYPE type,char src, char dest, int last, int next);
+	void write_log_file();
+	void write_output_file(PKT_TYPE type,char src, char dest, int last, int next);
 
 	PKT_TYPE get_packet_type();
 	void periodic_send();
