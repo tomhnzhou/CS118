@@ -20,10 +20,17 @@ typedef struct{
 	int dest_port;
 } FTEntry;
 
+typedef struct{
+	time_t time_sent;	//in POSIX seconds
+	int pkt_id;
+	char dest_id;
+} DataRecordEntry;
+
 enum PKT_TYPE {
 	INVALID_PKT,
 	DATA_PKT,
-	CONTROL_PKT
+	CONTROL_PKT, 
+	RREP_PKT
 };
 
 class DVRouter
@@ -43,6 +50,7 @@ public:
       std::size_t /*bytes_transferred*/);
 	void handle_data_pkt();
 	void handle_control_pkt();
+	void handle_rrep_pkt();
 
 	int get_out_port(char dest);
 	void send_to(int port);
@@ -54,7 +62,8 @@ public:
 	PKT_TYPE get_packet_type();
 	void periodic_send();
 	void handle_timeout();
-	void format_dv_msg();
+	void prepare_dv_send();
+	void prepare_rrep_send();
 	bool is_neighbor(char rid);
 
 	int parse_msg(char* buf, std::string& line);
@@ -71,6 +80,8 @@ public:
 	char data_buffer[MAX_LENGTH];
 
 	int dv_rcvd[6];
+	int last_pkt_id;
+	DataRecordEntry data_record[16];
     char neighbors[6]; // who are my neighbors?
 	FTEntry ft[6];    // the forwarding table
     int DV[6][6];     // the distance vector table

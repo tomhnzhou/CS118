@@ -28,6 +28,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
         strcpy(data_buffer, "Type: Data\n");
         strcat(data_buffer, "Src ID: A, Dest ID: D\n");
         strcat(data_buffer, "Path:       \n");
+        strcat(data_buffer, "Pkt ID: \n");
 
         int header_len = strlen(data_buffer);
         int bytes_to_read = MAX_LENGTH - header_len -1;
@@ -45,6 +46,9 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
         bzero(data_buffer, MAX_LENGTH);
         bzero(neighbors, 6);
         memset(dv_rcvd, 0, 6*sizeof(int));
+        last_pkt_id = 0;
+        for(int i=0; i<16; i++) 
+            data_record[i].pkt_id = -1;
     	ft_init(); dv_init(); //dv_print(); ft_print();
         start_receive();
         periodic_timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
@@ -59,7 +63,7 @@ void DVRouter::periodic_send()
 
 	for(int i = 0; neighbors[i] != 0 && i < 6; i++){
 		int neighbor_port = port_no(neighbors[i]);
-		format_dv_msg();
+		prepare_dv_send();
         send_to(neighbor_port);
         bzero(data_buffer, MAX_LENGTH);
 	}
@@ -75,13 +79,21 @@ void DVRouter::handle_timeout()
         //printf("Checking at timeout: %c\n", 'A'+i);
         if(dv_rcvd[i] == 0 && is_neighbor('A'+i)){
             //printf("Timeout: %c\n", 'A'+i);
-            int max_dv[6]; 
-            for(int j=0; j<6; j++)
-                max_dv[j] = INT_MAX;
-            update(max_dv, 'A'+i);
+            mark_dead_router('A'+i);
         }
     }
     memset(dv_rcvd, 0, 6*sizeof(int));
+
+    for(int i = 0; i < 16; i++){
+        if(data_record[i].pkt_id != -1){
+            double sec = difftime(time(0), data_record[i].time_sent);
+            if(sec > 5){
+                printf("%c > Did not get RREP from %c in time\n", 
+                    id, data_record[i].dest_id);
+                data_record[i].pkt_id = -1;
+            }
+        }
+    }
 
     timeout_timer->expires_at(timeout_timer->expires_at() + boost::posix_time::seconds(10));
     timeout_timer->async_wait(boost::bind(&DVRouter::handle_timeout, this));
@@ -110,12 +122,13 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
         if(type == DATA_PKT){
             //printf("Data packet received\n");
             handle_data_pkt();
-          }
-        else if(type == CONTROL_PKT){
+          } else if(type == CONTROL_PKT){
             //printf("Control packet received\n");
             handle_control_pkt();
-          }
-        else
+          } else if(type == RREP_PKT) {
+            handle_rrep_pkt();
+          } 
+          else
             printf("Invalid packet received\n");
         write_log_file();
         bzero(data_buffer, MAX_LENGTH);
@@ -232,18 +245,103 @@ void DVRouter::handle_data_pkt()
     next_line[6+path_len] = id;
     string path = line.substr(6, path_len+1);
 
+    // "Pkt ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    string pkt_id;
+    if(src_id == id){
+        //printf("%c > Buffer before adding path: %s\n", id, data_buffer);
+        last_pkt_id++;
+        pkt_id = to_string(last_pkt_id);
+        int bytes_to_move = strlen(data_buffer) - offset + 1;
+        char* move_src = &data_buffer[offset-1];
+        //printf("%c > Src move: %s\n", id, move_src);
+        char* move_dest = move_src + pkt_id.length();
+        memmove(move_dest, move_src, bytes_to_move);
+        strcpy(move_src, pkt_id.c_str());
+        move_src[pkt_id.length()] = '\n';
+        //printf("%c > Buffer after adding path: %s\n", id,data_buffer);
+    } else {
+        int i;
+        for(i = 8; i < MAX_LENGTH; i++){
+            if(isspace(next_line[i])) 
+                break;
+        }
+        pkt_id = string(&next_line[8], i-8);
+        //printf("%c > Parsed pkt id is: %s\n", id, pkt_id.c_str());
+    }
 
     //printf("Sender ID is: %c\n", sender_id);
     int out_port = get_out_port(dest_id);
     write_output_file(DATA_PKT, src_id, dest_id, 
                     sender_endpoint.port(), out_port, path);
 
-    if(dest_id == id) return;
+    if(dest_id == id) {
+        prepare_rrep_send();
+        printf("%c > sending RREP: %s\n", id, data_buffer);
+        out_port = get_out_port(src_id);
+    } else if (src_id == id){
+        for(int i = 0; i < 16; i++){
+            if(data_record[i].pkt_id <= 0){
+                data_record[i].pkt_id = last_pkt_id;
+                data_record[i].time_sent = time(0);
+                data_record[i].dest_id = dest_id;
+                break;
+            }
+        }
+    }
 
-    //printf("Sending to port %d...\n", out_port);
-    send_to(out_port); 
+    send_to(out_port);
 }
 
+void DVRouter::handle_rrep_pkt()
+{
+    //printf("%c > RREP received: \n%s\n", id, data_buffer);
+
+    int offset;
+    string line;
+    char* next_line;
+
+    // "Type: " line
+    if((offset = parse_msg(data_buffer, line)) < 0) return;
+
+    // "Src ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    char dest_id = line[20];
+
+    // if dest of rrep is not reached, 
+    //  treat it like any data pkt
+    if(dest_id != id){
+        handle_data_pkt();
+        return;
+    }
+
+    // "Path: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    // "Pkt ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    int i;
+    for(i = 8; i < MAX_LENGTH; i++){
+        if(isspace(next_line[i])) 
+            break;
+    }
+    string pkt_id_str = string(&next_line[8], i-8);
+    int rcvd_pkt_id = stoi(pkt_id_str);
+
+    for(i=0; i<16; i++){
+        if(data_record[i].pkt_id == rcvd_pkt_id){
+            data_record[i].pkt_id = -1;
+            break;
+        }
+    }
+}
 // send the data in data_buffer to the specified port
 void DVRouter::send_to(int port){
     char neighbor_id = 'A' + (port-10000);
@@ -348,7 +446,7 @@ int DVRouter::get_out_port(char dest)
 }
 
 //format a DV update message and store it in data_buffer
-void DVRouter::format_dv_msg()
+void DVRouter::prepare_dv_send()
 {
 	bzero(data_buffer, MAX_LENGTH);
 	strcpy(data_buffer, "Type: Control\n");
@@ -377,6 +475,41 @@ void DVRouter::format_dv_msg()
 	strcat(data_buffer, self_dv);
 }
 
+void DVRouter::prepare_rrep_send()
+{
+    int offset;
+    string line;
+    char* next_line;
+
+    // "Type: " line
+    if((offset = parse_msg(data_buffer, line)) < 0) return;
+    strcpy(&data_buffer[6], "RREP");
+    data_buffer[10] = '\n';
+
+    // "Src ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    char src_id = line[8];
+    char dest_id = line[20];
+    next_line[20] = src_id; next_line[8] = dest_id;
+
+    // "Path: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    int path_len = 0;
+    next_line[6] = id;
+    for(int i = 7; i < 12; i++)
+        next_line[i] = ' ';
+
+    // "Pkt ID: " line
+    next_line = &(data_buffer[offset]);
+    if((offset = parse_msg(next_line, line)) < 0) return;
+
+    data_buffer[offset] = 0;
+}
+
 PKT_TYPE DVRouter::get_packet_type(){
     char* found;
     if( !(found = strstr(data_buffer, "Type: ")) )
@@ -391,6 +524,7 @@ PKT_TYPE DVRouter::get_packet_type(){
         type_str[i] = found[i];
     if(!strcmp(type_str, "Control")) type = CONTROL_PKT;
     else if(!strcmp(type_str, "Data")) type = DATA_PKT;
+    else if(!strcmp(type_str, "RREP")) type = RREP_PKT;
     else type = INVALID_PKT;
 
     return type;
@@ -553,6 +687,14 @@ bool DVRouter::update(int dv[6], char neighbor_id)
         }
     }
     return changed;
+}
+
+void DVRouter::mark_dead_router(char rid)
+{
+    int max_dv[6]; 
+    for(int j=0; j<6; j++)
+        max_dv[j] = INT_MAX;
+    update(max_dv, rid);
 }
 
 bool valid_router_id(char id){
