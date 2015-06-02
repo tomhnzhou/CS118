@@ -144,6 +144,7 @@ int DVRouter::parse_msg(char* buf, string& line)
 
 void DVRouter::parse_dv_line(string line, int dv[6])
 {
+    // cout<<line;
     string delimiter = ",";
     string token;
     for(int i=0; i<5; i++){
@@ -372,6 +373,7 @@ void DVRouter::format_dv_msg()
         if(i == 5) break;
         strcat(self_dv, ",");
 	}
+    //cout<<data_buffer;
 	strcat(data_buffer, self_dv);
 }
 
@@ -532,7 +534,7 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                 if (ft[j].dest_id < ft[i].dest_id)
                 {
                     if (j == my_row_num)
-                        {break;}
+                        {continue;}
                     ft[i].dest_id = j+'A';
                     ft[i].dest_port =  port_no(j+'A');
                     changed = true;
