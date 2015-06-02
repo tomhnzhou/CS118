@@ -17,6 +17,7 @@ if [ "$#" -eq 1 ]; then
 				rm "routing-log$id.txt"
 			fi
 			./my-router "$id" &
+			echo "Running router $id with PID: $!"
 			sleep 2;
 		done
 		wait ${!}
@@ -34,6 +35,7 @@ elif [ "$#" -eq 6 ]; then
 				rm "routing-log$id.txt"
 			fi
 			./my-router "$id" &
+			echo "Running router $id with PID: $!"
 			sleep 2;
 	done
 	wait ${!}
