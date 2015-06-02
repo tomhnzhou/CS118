@@ -504,19 +504,24 @@ void DVRouter::dv_print(int fd) // print the distance vector table
         printf("Error writing to log file\n");
 }
 
-void DVRouter::update(int dv[6], char neighbor_id)
+bool DVRouter::update(int dv[6], char neighbor_id)
 {
+    bool changed = false;
     int my_row_num = id - 'A'; 
     int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
-    for (int i = 0; i < 6; i++)
-        {DV[Neigh_row_num][i] = dv[i];}
+    for (int i = 0; i < 6; i++){
+        //if(DV[Neigh_row_num][i] != dv[i]){
+            //changed = true;
+            DV[Neigh_row_num][i] = dv[i];
+        //}
+    }
     //int to_Neigh_cost = ft[Neigh_row_num].cost; 
 
     for (int i = 0; i < 6; i++)
     {
         char lastid = ft[i].dest_id;
         if (DV[lastid-'A'][i]!=INT_MAX && ft[i].cost!=INT_MAX)
-            {DV[my_row_num][i] = ft[i].cost + DV[lastid-'A'][i];}
+            DV[my_row_num][i] = ft[i].cost + DV[lastid-'A'][i];
 
         for (int j = 0; j < 6; j++)
         {
@@ -530,6 +535,7 @@ void DVRouter::update(int dv[6], char neighbor_id)
                         {break;}
                     ft[i].dest_id = j+'A';
                     ft[i].dest_port =  port_no(j+'A');
+                    changed = true;
                 }
             }
             else if (DV[my_row_num][i] > ft[j].cost + DV[j][i])// need to update DV!
@@ -537,12 +543,14 @@ void DVRouter::update(int dv[6], char neighbor_id)
                 DV[my_row_num][i] = ft[j].cost + DV[j][i];
                 ft[i].dest_id = j+'A';
                 ft[i].dest_port =  port_no(j+'A');
+                changed = true;
 
                 //ft[i].dest_id = ft[j].dest_id;
                 //ft[i].dest_port = port_no(ft[j].dest_id);
             }
         }
     }
+    return changed;
 }
 
 bool valid_router_id(char id){
