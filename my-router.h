@@ -53,7 +53,9 @@ public:
 
 	PKT_TYPE get_packet_type();
 	void periodic_send();
+	void handle_timeout();
 	void format_dv_msg();
+	bool is_neighbor(char rid);
 
 	int parse_msg(char* buf, std::string& line);
 	void parse_dv_line(std::string line, int dv[6]);
@@ -63,10 +65,12 @@ public:
 	int port;      // my port number
 	udp::socket socket;     // my socket descriptor
 	udp::endpoint sender_endpoint;
-	boost::asio::deadline_timer* timer;
+	boost::asio::deadline_timer* periodic_timer;
+	boost::asio::deadline_timer* timeout_timer;
 	const static int MAX_LENGTH = 1024;
 	char data_buffer[MAX_LENGTH];
 
+	int dv_rcvd[6];
     char neighbors[6]; // who are my neighbors?
 	FTEntry ft[6];    // the forwarding table
     int DV[6][6];     // the distance vector table
