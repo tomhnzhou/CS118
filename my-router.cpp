@@ -144,7 +144,7 @@ int DVRouter::parse_msg(char* buf, string& line)
 
 void DVRouter::parse_dv_line(string line, int dv[6])
 {
-    cout<<line;
+    // cout<<line;
     string delimiter = ",";
     string token;
     for(int i=0; i<5; i++){
