@@ -76,10 +76,13 @@ void DVRouter::handle_timeout()
 {
         //std::cout << "Another 10 seconds...\n";
     for(int i = 0; i < 6; i++){
-        //printf("Checking at timeout: %c\n", 'A'+i);
         if(dv_rcvd[i] == 0 && is_neighbor('A'+i)){
-            //printf("Timeout: %c\n", 'A'+i);
             mark_dead_router('A'+i);
+            char err_msg[128]; bzero(err_msg,128);
+            sprintf(err_msg, 
+                "Have not received Control message from %c for a long time.\n", 
+                'A'+i);
+            log_error(err_msg);
         }
     }
     memset(dv_rcvd, 0, 6*sizeof(int));
@@ -88,9 +91,13 @@ void DVRouter::handle_timeout()
         if(data_record[i].pkt_id != -1){
             double sec = difftime(time(0), data_record[i].time_sent);
             if(sec > 5){
-                printf("%c > Did not get RREP from %c in time\n", 
-                    id, data_record[i].dest_id);
+                mark_dead_router(data_record[i].dest_id);
                 data_record[i].pkt_id = -1;
+                char err_msg[128]; bzero(err_msg,128);
+                sprintf(err_msg, 
+                    "Have not received RREP from %c for a long time.\n", 
+                    data_record[i].dest_id);
+                log_error(err_msg);
             }
         }
     }
@@ -128,9 +135,9 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
           } else if(type == RREP_PKT) {
             handle_rrep_pkt();
           } 
-          else
+          else{
             printf("Invalid packet received\n");
-        //write_log_file();
+        }
         bzero(data_buffer, MAX_LENGTH);
         start_receive();
     }
@@ -211,11 +218,11 @@ void DVRouter::handle_control_pkt()
     //printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
             //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
 
-    update(dv, sender_id);
+    bool dv_changed = update(dv, sender_id);
+    log_received_data(dv_changed);
     //dv_print(); ft_print();
-    write_output_file(CONTROL_PKT, sender_id, id, 
-                port_no(sender_id), -1, string(path));
-    write_log_file();
+    //write_output_file(CONTROL_PKT, sender_id, id, 
+                //port_no(sender_id), -1, string(path));
 }
 
 void DVRouter::handle_data_pkt()
@@ -275,12 +282,11 @@ void DVRouter::handle_data_pkt()
 
     //printf("Sender ID is: %c\n", sender_id);
     int out_port = get_out_port(dest_id);
-    write_output_file(DATA_PKT, src_id, dest_id, 
-                    sender_endpoint.port(), out_port, path);
-    write_log_file();
+    log_received_data(false);
+    
     if(dest_id == id) {
         prepare_rrep_send();
-        printf("%c > sending RREP: %s\n", id, data_buffer);
+        
         out_port = get_out_port(src_id);
     } else if (src_id == id){
         for(int i = 0; i < 16; i++){
@@ -343,7 +349,7 @@ void DVRouter::handle_rrep_pkt()
         }
     }
 
-    write_log_file();
+    log_received_data(false);
 }
 // send the data in data_buffer to the specified port
 void DVRouter::send_to(int port){
@@ -358,64 +364,8 @@ void DVRouter::send_to(int port){
     //bzero(data_buffer, MAX_LENGTH);
 }
 
-void DVRouter::write_output_file(PKT_TYPE type, char src, char dest, 
-                                int last, int next, string path)
+void DVRouter::log_received_data(bool print_dv)
 {
-    int fd;
-    char log_filename[20]; bzero(log_filename, 20);
-    sprintf(log_filename, "routing-output%c.txt", id);
-    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT, 0644)) < 0) {
-        printf("Error: open output file failed, %s\n", strerror(errno));
-        return;
-    }
-
-    char type_str[10]; bzero(type_str, 10);
-    switch(type){
-        case DATA_PKT:   strcpy(type_str, "Data"); break;
-        case CONTROL_PKT:   strcpy(type_str, "Control"); break;
-        default:   strcpy(type_str, "Invalid");
-    }
-
-    char str_last[6]; char str_next[6];
-    sprintf(str_last, "%d", last);
-    if(next > 0) sprintf(str_next, "%d", next);
-    else strcpy(str_next, "-----");
-
-    time_t rawtime;
-    struct tm * timeinfo;
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
-    char* time_str = asctime(timeinfo);
-    time_str[strlen(time_str)-1] = 0;
-
-    char log_str[2048]; bzero(log_str, 2048);
-    sprintf (log_str, "%c>(%s) Type: %s, Src: %c, Dest: %c, From: %s, To: %s "
-                "Path: %s\n",
-            id, time_str, type_str,src,dest,str_last,str_next, 
-            path.c_str());
-
-    if(type == DATA_PKT && dest == id){
-        char data_str[1024]; bzero(data_str, 1024);
-        sprintf(data_str,   "+------Received Data-----+\n%s\n"
-                            "+------------------------+\n", data_buffer);
-        strcat(log_str, data_str);
-    }
-
-    if(write(fd, log_str, strlen(log_str)) < 0)
-        printf("write log failed!!!\n");
-    close(fd);
-}
-
-void DVRouter::write_log_file()
-{
-    int fd;
-    char log_filename[20]; bzero(log_filename, 20);
-    sprintf(log_filename, "routing-log%c.txt", id);
-    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT, 0644)) < 0) {
-        printf("Error: open log file failed, %s\n", strerror(errno));
-        return;
-    }
-
     time_t rawtime;
     struct tm * timeinfo;
     time(&rawtime);
@@ -426,18 +376,68 @@ void DVRouter::write_log_file()
 
     char log_line[1024]; bzero(log_line, 1024);
     sprintf (log_line, 
-        "/////////////////////////\n"
-        "%c> %s: \n"
-        "/////////////////////////\n\n"
+        "/////////////////////////////////\n"
+        "Router %c> %s \n"
+        "/////////////////////////////////\n\n"
         "Received Message from port %d:\n"
         "+------------------------+\n%s\n"
         "+------------------------+\n",
             id, time_str, sender_endpoint.port(), data_buffer);
 
-    if(write(fd, log_line, strlen(log_line)) < 0)
-        printf("Error: write log failed!!!\n");
+    if(print_dv){
+        strcat(log_line, "Updated DV and Forwarding Table: \n\n");
+        int log_len = strlen(log_line);
+        ft_print(&log_line[log_len]); 
+        log_len = strlen(log_line);
+        dv_print(&log_line[log_len]);
+    }
+    else
+        strcat(log_line, "DV and Forwarding Table unchanged.\n\n");
+    write_log(log_line);
+}
 
-    ft_print(fd); dv_print(fd);
+void DVRouter::log_error(char* err_msg)
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    char* time_str = asctime(timeinfo);
+    time_str[strlen(time_str)-1] = 0;
+
+    char log_line[1024]; bzero(log_line, 1024);
+    sprintf (log_line, 
+        "/////////////////////////////////\n"
+        "Router %c> %s \n"
+        "/////////////////////////////////\n\n"
+        "Error: %s\n",
+            id, time_str, err_msg);
+
+    strcat(log_line, "Updated DV and Forwarding Table: \n\n");
+    int log_len = strlen(log_line);
+    ft_print(&log_line[log_len]); 
+    log_len = strlen(log_line);
+    dv_print(&log_line[log_len]);
+
+    write_log(log_line);
+}
+
+void DVRouter::write_log(char* log_str)
+{
+    int fd;
+    char log_filename[32]; bzero(log_filename, 32);
+    sprintf(log_filename, "routing-output%c.txt", id);
+    if((fd = open(log_filename, O_RDWR | O_APPEND | O_CREAT, 0644)) < 0) {
+        printf("%c > Error: open log file failed, %s\n", 
+                id, strerror(errno));
+        return;
+    }
+
+    if(write(fd, log_str, strlen(log_str)) < 0)
+        printf("%c > Error: failed write to file, %s\n", 
+                id, strerror(errno));
+
     close(fd);
 }
 
@@ -588,12 +588,11 @@ void DVRouter::dv_init()  // initialize distance vector table
     }
 }
 
-void DVRouter::ft_print(int fd) // print the forwarding table
+void DVRouter::ft_print(char* print_str) // print the forwarding table
 {
-    char tmp_buf[1024]; bzero(tmp_buf, 1024);
     char line_buf[64]; bzero(line_buf, 64);
     sprintf(line_buf, "\n+---Forwarding Table of Router %c---+\n", id);
-    strcpy(tmp_buf, line_buf);
+    strcpy(print_str, line_buf);
     for (int i = 0; i < 6; i++)
     { 
         if(ft[i].cost == INT_MAX)
@@ -602,59 +601,52 @@ void DVRouter::ft_print(int fd) // print the forwarding table
         else
             sprintf(line_buf, "%c | C=%d, outport=%d, destport=%d\n", 
                 ft[i].dest_id, ft[i].cost, ft[i].out_port, ft[i].dest_port);
-        strcat(tmp_buf, line_buf);
+        strcat(print_str, line_buf);
     }
-    strcat(tmp_buf, "+-------------------------------+\n\n");
-
-    if(write(fd, tmp_buf, strlen(tmp_buf)) < 0)
-        printf("Error writing to log file\n");
+    strcat(print_str, "+-------------------------------+\n\n");
 }
 
-void DVRouter::dv_print(int fd) // print the distance vector table
+void DVRouter::dv_print(char* print_str) // print the distance vector table
 {
-    char tmp_buf[1024]; bzero(tmp_buf, 1024);
     char line_buf[64]; bzero(line_buf, 64);
 
     sprintf(line_buf, "+------DV Table of Router %c---+\n", id);
-    strcpy(tmp_buf, line_buf);
+    strcpy(print_str, line_buf);
 
-    strcat(tmp_buf,"    ");
+    strcat(print_str,"    ");
     for (int j = 0; j < 6; j++){
         sprintf(line_buf, "%c | ", 'A'+j);
-        strcat(tmp_buf, line_buf);
+        strcat(print_str, line_buf);
     }
-    strcat(tmp_buf, "\n");
+    strcat(print_str, "\n");
 
     for (int i = 0; i < 6; i++)
     {
         sprintf(line_buf, "%c | ", 'A'+i);
-        strcat(tmp_buf, line_buf);
+        strcat(print_str, line_buf);
         for (int j = 0; j < 6; j++)
         {
             if(DV[i][j] == INT_MAX) sprintf(line_buf, "%c | ", '-');
             else sprintf(line_buf, "%d | ", DV[i][j]);
-            strcat(tmp_buf, line_buf);
+            strcat(print_str, line_buf);
         }
-        strcat(tmp_buf, "\n");
+        strcat(print_str, "\n");
     }
-    strcat(tmp_buf, "+---------------------------+\n\n");
-
-    if(write(fd, tmp_buf, strlen(tmp_buf)) < 0)
-        printf("Error writing to log file\n");
+    strcat(print_str, "+---------------------------+\n\n");
 }
 
 bool DVRouter::update(int dv[6], char neighbor_id)
 {
-    bool changed = false;
+    //copy the old dv
+    int old_dv[6][6];
+    for(int i = 0; i < 6; i++)
+        for(int j = 0; j < 6; j++)
+            old_dv[i][j] = DV[i][j];
+
     int my_row_num = id - 'A'; 
     int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
-    for (int i = 0; i < 6; i++){
-        //if(DV[Neigh_row_num][i] != dv[i]){
-            //changed = true;
-            DV[Neigh_row_num][i] = dv[i];
-        //}
-    }
-    //int to_Neigh_cost = ft[Neigh_row_num].cost; 
+    for (int i = 0; i < 6; i++)
+        DV[Neigh_row_num][i] = dv[i];
 
     for (int i = 0; i < 6; i++)
     {
@@ -674,7 +666,6 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                         {continue;}
                     ft[i].dest_id = j+'A';
                     ft[i].dest_port =  port_no(j+'A');
-                    changed = true;
                 }
             }
             else if (DV[my_row_num][i] > ft[j].cost + DV[j][i])// need to update DV!
@@ -682,14 +673,19 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                 DV[my_row_num][i] = ft[j].cost + DV[j][i];
                 ft[i].dest_id = j+'A';
                 ft[i].dest_port =  port_no(j+'A');
-                changed = true;
-
-                //ft[i].dest_id = ft[j].dest_id;
-                //ft[i].dest_port = port_no(ft[j].dest_id);
             }
         }
     }
-    return changed;
+    return dv_changed(old_dv, DV);
+}
+
+bool DVRouter::dv_changed(int old_dv[6][6], int new_dv[6][6])
+{
+    for(int i = 0; i < 6; i++)
+        for(int j = 0; j < 6; j++)
+            if(old_dv[i][j] != new_dv[i][j])
+                return true;
+    return false;
 }
 
 void DVRouter::mark_dead_router(char rid)

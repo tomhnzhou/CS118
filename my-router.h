@@ -39,8 +39,8 @@ public:
 	DVRouter(char rid, boost::asio::io_service& io_service); // initializer
 	void ft_init();   // initialize forwarding table
     void dv_init();   // initialize distance vector table, need to ft_init first
-    void ft_print(int fd);  // print the forwarding table
-    void dv_print(int fd);  // print the distance vector table
+    void ft_print(char* print_str);  // print the forwarding table
+    void dv_print(char* print_str);  // print the distance vector table
     bool update(int dv[6], char neighbor_id);
     void mark_dead_router(char rid);
 	void start_receive();
@@ -55,10 +55,9 @@ public:
 
 	int get_out_port(char dest);
 	void send_to(int port);
-	void write_log_file();
-	void write_output_file(PKT_TYPE type, 
-			char src, char dest, 
-			int last, int next, std::string path);
+	void log_received_data(bool print_dv);
+	void log_error(char* err_msg);
+	void write_log(char* log_str);
 
 	PKT_TYPE get_packet_type();
 	void periodic_send();
@@ -66,6 +65,7 @@ public:
 	void prepare_dv_send();
 	void prepare_rrep_send();
 	bool is_neighbor(char rid);
+	bool dv_changed(int old_dv[6][6], int new_dv[6][6]);
 
 	int parse_msg(char* buf, std::string& line);
 	void parse_dv_line(std::string line, int dv[6]);
