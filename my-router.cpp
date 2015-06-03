@@ -130,7 +130,7 @@ void DVRouter::handle_receive(const boost::system::error_code& error,
           } 
           else
             printf("Invalid packet received\n");
-        write_log_file();
+        //write_log_file();
         bzero(data_buffer, MAX_LENGTH);
         start_receive();
     }
@@ -215,6 +215,7 @@ void DVRouter::handle_control_pkt()
     //dv_print(); ft_print();
     write_output_file(CONTROL_PKT, sender_id, id, 
                 port_no(sender_id), -1, string(path));
+    write_log_file();
 }
 
 void DVRouter::handle_data_pkt()
@@ -276,7 +277,7 @@ void DVRouter::handle_data_pkt()
     int out_port = get_out_port(dest_id);
     write_output_file(DATA_PKT, src_id, dest_id, 
                     sender_endpoint.port(), out_port, path);
-
+    write_log_file();
     if(dest_id == id) {
         prepare_rrep_send();
         printf("%c > sending RREP: %s\n", id, data_buffer);
@@ -341,6 +342,8 @@ void DVRouter::handle_rrep_pkt()
             break;
         }
     }
+
+    write_log_file();
 }
 // send the data in data_buffer to the specified port
 void DVRouter::send_to(int port){

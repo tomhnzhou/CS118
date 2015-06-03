@@ -42,6 +42,7 @@ public:
     void ft_print(int fd);  // print the forwarding table
     void dv_print(int fd);  // print the distance vector table
     bool update(int dv[6], char neighbor_id);
+    void mark_dead_router(char rid);
 	void start_receive();
 	void handle_receive(const boost::system::error_code& error,
   						std::size_t);
