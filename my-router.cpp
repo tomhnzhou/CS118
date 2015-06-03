@@ -660,12 +660,12 @@ bool DVRouter::update(int dv[6], char neighbor_id)
         char lastid = ft[i].dest_id;
         if (DV[lastid-'A'][i]!=INT_MAX && ft[i].realcost()!=INT_MAX)
             DV[my_row_num][i] = ft[i].realcost() + DV[lastid-'A'][i];
-        //else if (!ft[lastid-'A'].alive)
-            //DV[my_row_num][i] = INT_MAX;
+        else if (!ft[i].alive)
+            {DV[my_row_num][i] = INT_MAX; continue;}
 
         for (int j = 0; j < 6; j++)
         {
-            if (DV[j][i]==INT_MAX || ft[j].realcost() == INT_MAX || j==i)
+            if (DV[j][i]==INT_MAX || ft[j].realcost() == INT_MAX || j==my_row_num)
                 {continue;}
             if (DV[my_row_num][i] == ft[j].realcost() + DV[j][i]) // if the same total cost, alphabet order!
             {
@@ -704,7 +704,7 @@ void DVRouter::mark_dead_router(char rid)
         max_dv[j] = INT_MAX;
     update(max_dv, rid);
     ft[rid-'A'].alive = false;
-    DV[id-'A'][rid-'A'] = INT_MAX;
+    //DV[id-'A'][rid-'A'] = INT_MAX;
 }
 
 bool valid_router_id(char id){
