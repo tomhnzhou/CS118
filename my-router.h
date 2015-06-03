@@ -18,6 +18,8 @@ typedef struct{
 	int cost;
 	int out_port;
 	int dest_port;
+    bool alive;
+    int realcost() {return alive?cost:INT_MAX;} //what's the real cost?
 } FTEntry;
 
 typedef struct{

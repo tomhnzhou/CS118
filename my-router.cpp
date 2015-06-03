@@ -91,7 +91,7 @@ void DVRouter::handle_timeout()
         if(data_record[i].pkt_id != -1){
             double sec = difftime(time(0), data_record[i].time_sent);
             if(sec > 5){
-                mark_dead_router(data_record[i].dest_id);
+                //mark_dead_router(data_record[i].dest_id);
                 data_record[i].pkt_id = -1;
                 char err_msg[128]; bzero(err_msg,128);
                 sprintf(err_msg, 
@@ -217,6 +217,9 @@ void DVRouter::handle_control_pkt()
 
     //printf("Parsed DV: %d, %d, %d, %d, %d, %d\n", 
             //dv[0], dv[1], dv[2], dv[3], dv[4], dv[5]);
+
+    // if received ctrl packet from sender, sender is alive!
+    ft[sender_id-'A'].alive = true;
 
     bool dv_changed = update(dv, sender_id);
     log_received_data(dv_changed);
@@ -544,6 +547,9 @@ void DVRouter::ft_init()  // initialize forwarding table
             {ft[i].cost = 0;}
         ft[i].out_port = port;
         ft[i].dest_port = 0;
+        ft[i].alive = true;
+        //if (i+'A'== id)
+            //ft[i].alive = true;
     }
     ifstream myfile ("topology.txt", ifstream::in); // change topology file here!!!!
 
@@ -566,6 +572,7 @@ void DVRouter::ft_init()  // initialize forwarding table
             line.erase(0, line.find(delimiter) + delimiter.length());
             token = line.substr(0, line.find(delimiter));
             ft[row_num].cost = min(stoi(token, nullptr, 10), ft[row_num].cost);
+            ft[row_num].alive = false;
         }
         myfile.close();
     } 
@@ -596,11 +603,11 @@ void DVRouter::ft_print(char* print_str) // print the forwarding table
     for (int i = 0; i < 6; i++)
     { 
         if(ft[i].cost == INT_MAX)
-            sprintf(line_buf, "%c | C=%c, outport=%d, destport=%d\n", 
-                    ft[i].dest_id, '-', ft[i].out_port, ft[i].dest_port);
+            sprintf(line_buf, "%c | C=%c, outport=%d, destport=%d, %s\n", 
+                    ft[i].dest_id, '-', ft[i].out_port, ft[i].dest_port, ft[i].alive?"alive":"dead");
         else
-            sprintf(line_buf, "%c | C=%d, outport=%d, destport=%d\n", 
-                ft[i].dest_id, ft[i].cost, ft[i].out_port, ft[i].dest_port);
+            sprintf(line_buf, "%c | C=%d, outport=%d, destport=%d, %s\n", 
+                ft[i].dest_id, ft[i].cost, ft[i].out_port, ft[i].dest_port, ft[i].alive?"alive":"dead");
         strcat(print_str, line_buf);
     }
     strcat(print_str, "+-------------------------------+\n\n");
@@ -651,14 +658,16 @@ bool DVRouter::update(int dv[6], char neighbor_id)
     for (int i = 0; i < 6; i++)
     {
         char lastid = ft[i].dest_id;
-        if (DV[lastid-'A'][i]!=INT_MAX && ft[i].cost!=INT_MAX)
-            DV[my_row_num][i] = ft[i].cost + DV[lastid-'A'][i];
+        if (DV[lastid-'A'][i]!=INT_MAX && ft[i].realcost()!=INT_MAX)
+            DV[my_row_num][i] = ft[i].realcost() + DV[lastid-'A'][i];
+        //else if (!ft[lastid-'A'].alive)
+            //DV[my_row_num][i] = INT_MAX;
 
         for (int j = 0; j < 6; j++)
         {
-            if (DV[j][i]==INT_MAX || ft[j].cost == INT_MAX || j==i)
+            if (DV[j][i]==INT_MAX || ft[j].realcost() == INT_MAX || j==i)
                 {continue;}
-            if (DV[my_row_num][i] == ft[j].cost + DV[j][i]) // if the same total cost, alphabet order!
+            if (DV[my_row_num][i] == ft[j].realcost() + DV[j][i]) // if the same total cost, alphabet order!
             {
                 if (ft[j].dest_id < ft[i].dest_id)
                 {
@@ -668,9 +677,9 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                     ft[i].dest_port =  port_no(j+'A');
                 }
             }
-            else if (DV[my_row_num][i] > ft[j].cost + DV[j][i])// need to update DV!
+            else if (DV[my_row_num][i] > ft[j].realcost() + DV[j][i])// need to update DV!
             {
-                DV[my_row_num][i] = ft[j].cost + DV[j][i];
+                DV[my_row_num][i] = ft[j].realcost() + DV[j][i];
                 ft[i].dest_id = j+'A';
                 ft[i].dest_port =  port_no(j+'A');
             }
@@ -694,6 +703,8 @@ void DVRouter::mark_dead_router(char rid)
     for(int j=0; j<6; j++)
         max_dv[j] = INT_MAX;
     update(max_dv, rid);
+    ft[rid-'A'].alive = false;
+    DV[id-'A'][rid-'A'] = INT_MAX;
 }
 
 bool valid_router_id(char id){
