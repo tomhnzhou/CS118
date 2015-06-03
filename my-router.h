@@ -64,7 +64,7 @@ public:
 	PKT_TYPE get_packet_type();
 	void periodic_send();
 	void handle_timeout();
-	void prepare_dv_send();
+	void prepare_dv_send(char);
 	void prepare_rrep_send();
 	bool is_neighbor(char rid);
 	bool dv_changed(int old_dv[6][6], int new_dv[6][6]);

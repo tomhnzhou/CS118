@@ -63,7 +63,7 @@ void DVRouter::periodic_send()
 
 	for(int i = 0; neighbors[i] != 0 && i < 6; i++){
 		int neighbor_port = port_no(neighbors[i]);
-		prepare_dv_send();
+		prepare_dv_send(neighbors[i]);
         send_to(neighbor_port);
         bzero(data_buffer, MAX_LENGTH);
 	}
@@ -452,7 +452,7 @@ int DVRouter::get_out_port(char dest)
 }
 
 //format a DV update message and store it in data_buffer
-void DVRouter::prepare_dv_send()
+void DVRouter::prepare_dv_send(char dv_dest_id)
 {
 	bzero(data_buffer, MAX_LENGTH);
 	strcpy(data_buffer, "Type: Control\n");
@@ -468,7 +468,8 @@ void DVRouter::prepare_dv_send()
 	int row_num = id - 'A';
     string element;
 	for(int i=0; i<6; i++){
-		if(DV[row_num][i] == INT_MAX)
+		if(DV[row_num][i] == INT_MAX
+            || ft[i].dest_id == dv_dest_id)
             strcat(self_dv, "-");
         else{
 			element = to_string(DV[row_num][i]);
@@ -661,7 +662,12 @@ bool DVRouter::update(int dv[6], char neighbor_id)
         if (DV[lastid-'A'][i]!=INT_MAX && ft[i].realcost()!=INT_MAX)
             DV[my_row_num][i] = ft[i].realcost() + DV[lastid-'A'][i];
         else if (!ft[i].alive)
-            {DV[my_row_num][i] = INT_MAX; continue;}
+        {
+            DV[my_row_num][i] = INT_MAX;
+            continue;
+        }
+        else if(DV[lastid-'A'][i]==INT_MAX)
+            DV[my_row_num][i] = INT_MAX;
 
         for (int j = 0; j < 6; j++)
         {
