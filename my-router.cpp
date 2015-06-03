@@ -387,7 +387,7 @@ void DVRouter::log_received_data(bool print_dv)
         "+------------------------+\n",
             id, time_str, sender_endpoint.port(), data_buffer);
 
-    if(print_dv){
+    if(true){
         strcat(log_line, "Updated DV and Forwarding Table: \n\n");
         int log_len = strlen(log_line);
         ft_print(&log_line[log_len]); 
