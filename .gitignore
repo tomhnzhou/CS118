@@ -3,3 +3,4 @@ routing-log*
 my-router
 makefile
 makefile*
+*.tar
