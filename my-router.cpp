@@ -49,7 +49,7 @@ DVRouter::DVRouter(char rid, boost::asio::io_service& io_service)
         last_pkt_id = 0;
         for(int i=0; i<16; i++) 
             data_record[i].pkt_id = -1;
-    	ft_init(); dv_init(); //dv_print(); ft_print();
+    	ft_init(); dv_init(); log_init();//dv_print(); ft_print();
         start_receive();
         periodic_timer->async_wait(boost::bind(&DVRouter::periodic_send, this));
         timeout_timer->async_wait(boost::bind(&DVRouter::handle_timeout, this));
@@ -387,7 +387,7 @@ void DVRouter::log_received_data(bool print_dv)
         "+------------------------+\n",
             id, time_str, sender_endpoint.port(), data_buffer);
 
-    if(true){
+    if(print_dv){
         strcat(log_line, "Updated DV and Forwarding Table: \n\n");
         int log_len = strlen(log_line);
         ft_print(&log_line[log_len]); 
@@ -423,6 +423,33 @@ void DVRouter::log_error(char* err_msg)
     log_len = strlen(log_line);
     dv_print(&log_line[log_len]);
 
+    write_log(log_line);
+}
+
+void DVRouter::log_init()
+{
+    time_t rawtime;
+    struct tm * timeinfo;
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+
+    char* time_str = asctime(timeinfo);
+    time_str[strlen(time_str)-1] = 0;
+
+    char log_line[1024]; bzero(log_line, 1024);
+    sprintf (log_line, 
+        "/////////////////////////////////\n"
+        "Router %c> %s \n"
+        "/////////////////////////////////\n\n"
+        "Finished Router Initialization\n",
+            id, time_str);
+
+    strcat(log_line, "Initialized DV and Forwarding Table: \n\n");
+    int log_len = strlen(log_line);
+    ft_print(&log_line[log_len]); 
+    log_len = strlen(log_line);
+    dv_print(&log_line[log_len]);
+    
     write_log(log_line);
 }
 
@@ -653,8 +680,11 @@ bool DVRouter::update(int dv[6], char neighbor_id)
 
     int my_row_num = id - 'A'; 
     int Neigh_row_num = neighbor_id - 'A'; //neighbor's row_num
-    for (int i = 0; i < 6; i++)
+    for (int i = 0; i < 6; i++){
         DV[Neigh_row_num][i] = dv[i];
+        if(ft[i].dest_id == neighbor_id && dv[i] == INT_MAX)
+            ft[i].alive = false;
+    }
 
     for (int i = 0; i < 6; i++)
     {
@@ -664,7 +694,7 @@ bool DVRouter::update(int dv[6], char neighbor_id)
         else if (!ft[i].alive)
         {
             DV[my_row_num][i] = INT_MAX;
-            continue;
+            if(is_neighbor('A'+i)) continue;
         }
         else if(DV[lastid-'A'][i]==INT_MAX)
             DV[my_row_num][i] = INT_MAX;
@@ -681,6 +711,7 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                         {continue;}
                     ft[i].dest_id = j+'A';
                     ft[i].dest_port =  port_no(j+'A');
+                    ft[i].alive = true;
                 }
             }
             else if (DV[my_row_num][i] > ft[j].realcost() + DV[j][i])// need to update DV!
@@ -688,6 +719,7 @@ bool DVRouter::update(int dv[6], char neighbor_id)
                 DV[my_row_num][i] = ft[j].realcost() + DV[j][i];
                 ft[i].dest_id = j+'A';
                 ft[i].dest_port =  port_no(j+'A');
+                ft[i].alive = true;
             }
         }
     }

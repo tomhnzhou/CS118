@@ -58,6 +58,7 @@ public:
 	int get_out_port(char dest);
 	void send_to(int port);
 	void log_received_data(bool print_dv);
+	void log_init();
 	void log_error(char* err_msg);
 	void write_log(char* log_str);
 
@@ -72,7 +73,7 @@ public:
 	int parse_msg(char* buf, std::string& line);
 	void parse_dv_line(std::string line, int dv[6]);
 
-
+private:
 	char id;          // my id (A ~ F)
 	int port;      // my port number
 	udp::socket socket;     // my socket descriptor
